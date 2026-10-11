@@ -1,0 +1,14 @@
+# Fetched by Setup-Dependencies.ps1
+external/
+
+# Build output
+Aion2Extractor/bin/
+Aion2Extractor/obj/
+__pycache__/
+
+# Your database connection (copy config/database.example.ini)
+config/database.ini
+
+# Extracted client files, decrypted tables, decoded JSON, staging CSVs
+output/
+*.log

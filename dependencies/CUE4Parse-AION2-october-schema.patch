@@ -1,0 +1,153 @@
+diff --git a/CUE4Parse/GameTypes/Aion2/Objects/FAion2PropertyReader.cs b/CUE4Parse/GameTypes/Aion2/Objects/FAion2PropertyReader.cs
+index 3d280b0..7d35876 100644
+--- a/CUE4Parse/GameTypes/Aion2/Objects/FAion2PropertyReader.cs
++++ b/CUE4Parse/GameTypes/Aion2/Objects/FAion2PropertyReader.cs
+@@ -202,2 +202,40 @@ FScriptStruct ReadStruct(FAion2DatFileArchive Ar, TypeMappings mappings, string?
+ 
++                if (structName is "SkillEffectFilterTableItem" && index == 10)
++                {
++                    for (var payloadIndex = 1; payloadIndex <= 8; payloadIndex++)
++                    {
++                        var lookaheadPos = Ar.Position;
++                        var candidateLength = Ar.Read<int>();
++                        Ar.Position = lookaheadPos;
++                        string? propertyType = null;
++                        string? enumName = null;
++                        if (candidateLength < 0 && candidateLength > -256)
++                        {
++                            propertyType = "EnumProperty";
++                            enumName = "EUnknownPreTargetCountType";
++                        }
++                        else
++                        {
++                            var candidateFlag = Ar.Read<byte>();
++                            var followingLength = Ar.Read<int>();
++                            Ar.Position = lookaheadPos;
++                            if (candidateFlag <= 1 && followingLength < 0 && followingLength > -256)
++                                propertyType = "BoolProperty";
++                        }
++
++                        if (propertyType == null)
++                            break;
++
++                        var overlayTag = new FPropertyTag
++                        {
++                            Name = new FName($"UnknownPreTargetCountValue{payloadIndex}"),
++                            PropertyType = new FName(propertyType),
++                            TagData = new FPropertyTagData { EnumName = enumName },
++                        };
++                        overlayTag.Tag = ReadPropertyTagType(Ar, mappings, propertyType, overlayTag.TagData, true);
++                        overlayTag.Size = (int) (Ar.Position - lookaheadPos);
++                        properties.Add(overlayTag);
++                    }
++                }
++
+                 if (structName is "SkillEffectTableItem" && index == 9)
+@@ -216,2 +254,16 @@ FScriptStruct ReadStruct(FAion2DatFileArchive Ar, TypeMappings mappings, string?
+ 
++                if (structName is "QuestTypeTableItem" && index == 8)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("CompleteLimitOwnerType"),
++                        PropertyType = new FName("EnumProperty"),
++                        TagData = new FPropertyTagData { EnumName = "EQuestCompleteLimitOwnerType" },
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++
+                 if (structName is "ItemTableEquipmentInfo" && index == 1)
+@@ -233,2 +285,68 @@ FScriptStruct ReadStruct(FAion2DatFileArchive Ar, TypeMappings mappings, string?
+ 
++                if (structName is "ItemTableEquipmentInfo" && index == 10)
++                {
++                    var lookaheadPos = Ar.Position;
++                    var candidateFlag = Ar.Read<byte>();
++                    var followingLength = Ar.Read<int>();
++                    Ar.Position = lookaheadPos;
++                    if (candidateFlag <= 1 && followingLength < 0 && followingLength > -256)
++                    {
++                        var flagTag = new FPropertyTag
++                        {
++                            Name = new FName("UnknownPreEnchantIntervalFlag"),
++                            PropertyType = new FName("BoolProperty"),
++                            TagData = new FPropertyTagData(),
++                        };
++                        flagTag.Tag = ReadPropertyTagType(Ar, mappings, "BoolProperty", flagTag.TagData, true);
++                        flagTag.Size = (int) (Ar.Position - lookaheadPos);
++                        properties.Add(flagTag);
++                    }
++
++                    for (var payloadIndex = 1; payloadIndex <= 8; payloadIndex++)
++                    {
++                        lookaheadPos = Ar.Position;
++                        var candidateLength = Ar.Read<int>();
++                        Ar.Position = lookaheadPos;
++                        if (candidateLength >= 0 || candidateLength <= -256)
++                            break;
++
++                        var nameTag = new FPropertyTag
++                        {
++                            Name = new FName($"UnknownPreEnchantIntervalName{payloadIndex}"),
++                            PropertyType = new FName("NameProperty"),
++                            TagData = new FPropertyTagData(),
++                        };
++                        nameTag.Tag = ReadPropertyTagType(Ar, mappings, "NameProperty", nameTag.TagData, true);
++                        nameTag.Size = (int) (Ar.Position - lookaheadPos);
++                        properties.Add(nameTag);
++                    }
++                }
++
++                if (structName is "ItemTableEquipmentInfo" && index == 27)
++                {
++                    var lookaheadPos = Ar.Position;
++                    var prefixLength = 0;
++                    for (; prefixLength <= 64; prefixLength++)
++                    {
++                        Ar.Position = lookaheadPos + prefixLength;
++                        var candidateLength = Ar.Read<int>();
++                        if (candidateLength < 0 && candidateLength > -256)
++                            break;
++                    }
++                    Ar.Position = lookaheadPos;
++                    for (var prefixIndex = 0; prefixIndex < prefixLength; prefixIndex++)
++                    {
++                        var overlayPos = Ar.Position;
++                        var overlayTag = new FPropertyTag
++                        {
++                            Name = new FName($"UnknownPreSoulbindRandomSkillGroupByte{prefixIndex + 1}"),
++                            PropertyType = new FName("ByteProperty"),
++                            TagData = new FPropertyTagData(),
++                        };
++                        overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "ByteProperty", overlayTag.TagData, true);
++                        overlayTag.Size = (int) (Ar.Position - overlayPos);
++                        properties.Add(overlayTag);
++                    }
++                }
++
+                 if (structName is "SkillTableItem" && index == 21)
+@@ -403,3 +521,3 @@ FScriptStruct ReadStruct(FAion2DatFileArchive Ar, TypeMappings mappings, string?
+                 if ((structName is "SkillTableItem" && (index is 13 or 14 || index is >= 23 and <= 27 || index == 48 || index == 65))
+-                    || (structName is "ItemTableEquipmentInfo" && index is 1 or 2 or 6)
++                    || (structName is "ItemTableEquipmentInfo" && (index is 1 or 2 or 6 || index is >= 27 and <= 33))
+                     || (structName is "SkillEffectFilterTableItem" && index is 7 or 8))
+@@ -456,2 +574,16 @@ FScriptStruct ReadStruct(FAion2DatFileArchive Ar, TypeMappings mappings, string?
+ 
++            if (structName is "NpcTeleportTableItem")
++            {
++                var overlayPos = Ar.Position;
++                var overlayTag = new FPropertyTag
++                {
++                    Name = new FName("Race"),
++                    PropertyType = new FName("EnumProperty"),
++                    TagData = new FPropertyTagData { EnumName = "ERace" },
++                };
++                overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                overlayTag.Size = (int) (Ar.Position - overlayPos);
++                properties.Add(overlayTag);
++            }
++
+             if (structName is "NpcDataTableItem")

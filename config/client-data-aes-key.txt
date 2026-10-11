@@ -1,0 +1,3 @@
+# Authorized AION2 client-data AES-256 key.
+# Keep this repository private. Git retains this value in commit history.
+0x06038EF544B6007614F8574F1B7C2A3F0D565F74CDCC1B366B4EA1A17B97CBFF

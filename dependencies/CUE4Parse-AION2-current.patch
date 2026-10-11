@@ -1,0 +1,437 @@
+diff --git a/CUE4Parse/GameTypes/Aion2/Objects/FAion2DatFileArchive.cs b/CUE4Parse/GameTypes/Aion2/Objects/FAion2DatFileArchive.cs
+index 4c0c794..8725e0d 100644
+--- a/CUE4Parse/GameTypes/Aion2/Objects/FAion2DatFileArchive.cs
++++ b/CUE4Parse/GameTypes/Aion2/Objects/FAion2DatFileArchive.cs
+@@ -1,4 +1,5 @@
+ using System.Text;
++using CUE4Parse.UE4.Assets.Readers;
+ using CUE4Parse.UE4.Exceptions;
+ using CUE4Parse.UE4.Objects.UObject;
+ using CUE4Parse.UE4.Readers;
+@@ -53,3 +54,10 @@ private string ReadAion2String(byte[]? xorKey = null)
+     public override string ReadFString() => ReadAion2String();
+     public override FName ReadFName() => ReadFString();
+ }
++
++public sealed class FAion2AssetArchive(FAion2DatFileArchive Ar) : FAssetArchive(Ar, null)
++{
++    private readonly FAion2DatFileArchive _aionAr = Ar;
++
++    public override FName ReadFName() => _aionAr.ReadFName();
++}
+diff --git a/CUE4Parse/GameTypes/Aion2/Objects/FAion2DataTableFile.cs b/CUE4Parse/GameTypes/Aion2/Objects/FAion2DataTableFile.cs
+index 70f5ac3..20b1ffb 100644
+--- a/CUE4Parse/GameTypes/Aion2/Objects/FAion2DataTableFile.cs
++++ b/CUE4Parse/GameTypes/Aion2/Objects/FAion2DataTableFile.cs
+@@ -31,7 +31,9 @@ public FAion2DataTableFile(GameFile file, IFileProvider provider)
+         {
+             "AgitDecoItemTableItem" => "PersonalAgitDecoItemTableItem",
+             "AgitDecoSlotTableItem" => "PersonalAgitDecoSlotTableItem",
++            "ClientSliderSettingsTableItem" => "SliderSettingsTableItem",
+             "EnvObjDataTableItem" => "EnvObjTableItem",
++            "FieldEventPlatformerDilemmaTableItem" => "FieldEventDilemmaTableItem",
+             "KiskDataTableItem" => "KiskTableItem",
+             "MonsterPartsDataTableItem" => "PartsDataTableItem",
+             "PeriodItemCollectionTableItem" => "PeriodCollectionTableItem",
+@@ -51,6 +53,7 @@ public FAion2DataTableFile(GameFile file, IFileProvider provider)
+             "SkillProjectileTableItem" => "ProjectileTableItem",
+             "StringTableItem" => "AionStringTableItem",
+             "ServerMessageTableItem" => "ServerBroadcastDataTableItem",
++            "SeasonRankingRewardTableItem" => "SeasonRankingRewardCommonTableItem",
+             "VehicleListTableItem" => "VehicleDataTableItem",
+             "WaveStepDataTableItem" => "WaveStepTableItem",
+             "CVResource_StartUpTableItem" => "CVResourceTableItem",
+diff --git a/CUE4Parse/GameTypes/Aion2/Objects/FAion2PropertyReader.cs b/CUE4Parse/GameTypes/Aion2/Objects/FAion2PropertyReader.cs
+index ddff3b0..3d280b0 100644
+--- a/CUE4Parse/GameTypes/Aion2/Objects/FAion2PropertyReader.cs
++++ b/CUE4Parse/GameTypes/Aion2/Objects/FAion2PropertyReader.cs
+@@ -29,6 +29,7 @@ public static class FAion2PropertyReader
+             "MapProperty" => new MapProperty(ReadMap(Ar, mappings, tagData)),
+             "StrProperty" => new StrProperty(Ar.ReadUnencryptedFString()),
+             "StructProperty" => new StructProperty(ReadStruct(Ar, mappings, tagData?.StructType)),
++            "TextProperty" => new TextProperty(new FAion2AssetArchive(Ar), type),
+             "UInt16Property" => new UInt16Property(Ar.Read<ushort>()),
+             "UInt32Property" => new UInt32Property(Ar.Read<uint>()),
+             "UInt64Property" => new UInt64Property(Ar.Read<ulong>()),
+@@ -103,10 +104,311 @@ FScriptStruct ReadStruct(FAion2DatFileArchive Ar, TypeMappings mappings, string?
+             var propCount = propMappings.CountProperties(true);
+             var properties = new List<FPropertyTag>(propCount);
+ 
++            if (Environment.GetEnvironmentVariable("AION2_DUMP_MAPPING") == structName)
++            {
++                foreach (var mappingIndex in Enumerable.Range(0, propCount))
++                {
++                    propMappings.TryGetValue(mappingIndex, out var mappingInfo);
++                    Console.Error.WriteLine($"mapping {structName}[{mappingIndex}]: {mappingInfo.MappingType.Type} {mappingInfo.Name}");
++                }
++            }
++
+             foreach (var index in Enumerable.Range(0, propCount))
+             {
+                 propMappings.TryGetValue(index, out var info);
+ 
++                if (structName is "SkillLvTableItem" && index == 11)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("UnknownPreAutoLoadValue"),
++                        PropertyType = new FName("IntProperty"),
++                        TagData = new FPropertyTagData(),
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "IntProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++
++                if (structName is "ItemTableItem" && index == 5)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("ItemLevel"),
++                        PropertyType = new FName("IntProperty"),
++                        TagData = new FPropertyTagData(),
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "IntProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++
++                if (structName is "ItemTableItem" && index == 20)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("SellPriceCurrencyCategory"),
++                        PropertyType = new FName("EnumProperty"),
++                        TagData = new FPropertyTagData { EnumName = "ECurrencyCategory" },
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++
++                if (structName is "PcDataTableItem" && index == 6)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("MainWeaponType"),
++                        PropertyType = new FName("EnumProperty"),
++                        TagData = new FPropertyTagData { EnumName = "EWeaponType" },
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++
++                if (structName is "SkillEffectFilterTableItem" && index == 7)
++                {
++                    var lookaheadPos = Ar.Position;
++                    var prefixLength = 0;
++                    for (; prefixLength <= 8; prefixLength++)
++                    {
++                        Ar.Position = lookaheadPos + prefixLength;
++                        var candidateLength = Ar.Read<int>();
++                        if (candidateLength < 0 && candidateLength > -256)
++                            break;
++                    }
++                    Ar.Position = lookaheadPos;
++                    for (var prefixIndex = 0; prefixIndex < prefixLength; prefixIndex++)
++                    {
++                        var overlayPos = Ar.Position;
++                        var overlayTag = new FPropertyTag
++                        {
++                            Name = new FName($"UnknownPreTargetFilterByte{prefixIndex + 1}"),
++                            PropertyType = new FName("ByteProperty"),
++                            TagData = new FPropertyTagData(),
++                        };
++                        overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "ByteProperty", overlayTag.TagData, true);
++                        overlayTag.Size = (int) (Ar.Position - overlayPos);
++                        properties.Add(overlayTag);
++                    }
++                }
++
++                if (structName is "SkillEffectTableItem" && index == 9)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("HitFxMaterialOutputType"),
++                        PropertyType = new FName("EnumProperty"),
++                        TagData = new FPropertyTagData { EnumName = "EHitFxMaterialOutputType" },
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++
++                if (structName is "ItemTableEquipmentInfo" && index == 1)
++                {
++                    foreach (var overlayName in new[] { "ItemLevel", "ItemBasicLevel" })
++                    {
++                        var overlayPos = Ar.Position;
++                        var overlayTag = new FPropertyTag
++                        {
++                            Name = new FName(overlayName),
++                            PropertyType = new FName("ByteProperty"),
++                            TagData = new FPropertyTagData(),
++                        };
++                        overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "ByteProperty", overlayTag.TagData, true);
++                        overlayTag.Size = (int) (Ar.Position - overlayPos);
++                        properties.Add(overlayTag);
++                    }
++                }
++
++                if (structName is "SkillTableItem" && index == 21)
++                {
++                    foreach (var movedBoolName in new[] { "IgnoreCannotUseSkill", "IgnoreCastingStat" })
++                    {
++                        var movedBoolPos = Ar.Position;
++                        var movedBoolTag = new FPropertyTag
++                        {
++                            Name = new FName(movedBoolName),
++                            PropertyType = new FName("BoolProperty"),
++                            TagData = new FPropertyTagData(),
++                        };
++                        movedBoolTag.Tag = ReadPropertyTagType(Ar, mappings, "BoolProperty", movedBoolTag.TagData, true);
++                        movedBoolTag.Size = (int) (Ar.Position - movedBoolPos);
++                        properties.Add(movedBoolTag);
++                    }
++
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("OverlapSkillType"),
++                        PropertyType = new FName("EnumProperty"),
++                        TagData = new FPropertyTagData { EnumName = "ESkillOverlapType" },
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                    if (Environment.GetEnvironmentVariable("AION2_TRACE_SCHEMA") == "1")
++                        Console.Error.WriteLine($"overlay {structName} @{overlayPos}: EnumProperty OverlapSkillType");
++                }
++
++                if (structName is "SkillTableItem" && index == 22)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("SkillDispositionType"),
++                        PropertyType = new FName("EnumProperty"),
++                        TagData = new FPropertyTagData { EnumName = "ESkillDispositionType" },
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                    if (Environment.GetEnvironmentVariable("AION2_TRACE_SCHEMA") == "1")
++                        Console.Error.WriteLine($"overlay {structName} @{overlayPos}: EnumProperty SkillDispositionType");
++
++                    overlayPos = Ar.Position;
++                    overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("SkillDamageType"),
++                        PropertyType = new FName("EnumProperty"),
++                        TagData = new FPropertyTagData { EnumName = "ESkillDamageType" },
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                    if (Environment.GetEnvironmentVariable("AION2_TRACE_SCHEMA") == "1")
++                        Console.Error.WriteLine($"overlay {structName} @{overlayPos}: EnumProperty SkillDamageType");
++                }
++
++                if (structName is "SkillTableItem" && index == 53)
++                {
++                    foreach (var overlayName in new[] { "UnknownPostGroundAnimationName1", "UnknownPostGroundAnimationName2" })
++                    {
++                        var overlayPos = Ar.Position;
++                        var overlayTag = new FPropertyTag
++                        {
++                            Name = new FName(overlayName),
++                            PropertyType = new FName("NameProperty"),
++                            TagData = new FPropertyTagData(),
++                        };
++                        overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "NameProperty", overlayTag.TagData, true);
++                        overlayTag.Size = (int) (Ar.Position - overlayPos);
++                        properties.Add(overlayTag);
++                    }
++                }
++
++                if (structName is "SkillTableItem" && index == 52)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("UnknownPreGroundAnimationInt"),
++                        PropertyType = new FName("IntProperty"),
++                        TagData = new FPropertyTagData(),
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "IntProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++
++                if (structName is "SkillTableItem" && index == 86)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("CanUseSkillCostType"),
++                        PropertyType = new FName("EnumProperty"),
++                        TagData = new FPropertyTagData { EnumName = "ECanUseSkillCostType" },
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++
++                    overlayPos = Ar.Position;
++                    overlayTag = new FPropertyTag
++                    {
++                        Name = new FName("CanUseSkillCostValue"),
++                        PropertyType = new FName("IntProperty"),
++                        TagData = new FPropertyTagData(),
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "IntProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++
++                if (structName is "SkillTableItem" && index == 89)
++                {
++                    foreach (var overlay in new[]
++                    {
++                        (Name: "SkillGroundType", EnumName: "ESkillGroundType"),
++                        (Name: "SkillGroundShapeType", EnumName: "ESkillGroundShapeType"),
++                    })
++                    {
++                        var overlayPos = Ar.Position;
++                        var overlayTag = new FPropertyTag
++                        {
++                            Name = new FName(overlay.Name),
++                            PropertyType = new FName("EnumProperty"),
++                            TagData = new FPropertyTagData { EnumName = overlay.EnumName },
++                        };
++                        overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                        overlayTag.Size = (int) (Ar.Position - overlayPos);
++                        properties.Add(overlayTag);
++                    }
++                }
++
++                // Current records can carry a short variant payload immediately before
++                // SkillAutoType. Locate the encrypted enum FString and retain the bytes
++                // individually until their authoritative field types are identified.
++                if (structName is "SkillTableItem" && index == 97)
++                {
++                    var lookaheadPos = Ar.Position;
++                    var prefixLength = 0;
++                    for (; prefixLength <= 16; prefixLength++)
++                    {
++                        Ar.Position = lookaheadPos + prefixLength;
++                        var candidateLength = Ar.Read<int>();
++                        if (candidateLength < 0 && candidateLength > -256)
++                            break;
++                    }
++                    Ar.Position = lookaheadPos;
++                    for (var prefixIndex = 0; prefixIndex < prefixLength; prefixIndex++)
++                    {
++                        var overlayPos = Ar.Position;
++                        var overlayTag = new FPropertyTag
++                        {
++                            Name = new FName($"UnknownPreSkillAutoByte{prefixIndex + 1}"),
++                            PropertyType = new FName("ByteProperty"),
++                            TagData = new FPropertyTagData(),
++                        };
++                        overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "ByteProperty", overlayTag.TagData, true);
++                        overlayTag.Size = (int) (Ar.Position - overlayPos);
++                        properties.Add(overlayTag);
++                    }
++                }
++
++                if (Environment.GetEnvironmentVariable("AION2_TRACE_SCHEMA") == "1")
++                    Console.Error.WriteLine($"schema {structName}[{index}] @{Ar.Position}: {info.MappingType.Type} {info.Name}");
++
++                if ((structName is "SkillTableItem" && (index is 13 or 14 || index is >= 23 and <= 27 || index == 48 || index == 65))
++                    || (structName is "ItemTableEquipmentInfo" && index is 1 or 2 or 6)
++                    || (structName is "SkillEffectFilterTableItem" && index is 7 or 8))
++                {
++                    if (Environment.GetEnvironmentVariable("AION2_TRACE_SCHEMA") == "1")
++                        Console.Error.WriteLine($"removed {structName}[{index}]: {info.MappingType.Type} {info.Name}");
++                    continue;
++                }
++
+                 var tag = new FPropertyTag()
+                 {
+                     Name = new FName(info.Name),
+@@ -138,6 +440,68 @@ FScriptStruct ReadStruct(FAion2DatFileArchive Ar, TypeMappings mappings, string?
+ 
+             }
+ 
++            if (structName is "SkillTableItem")
++            {
++                var overlayPos = Ar.Position;
++                var overlayTag = new FPropertyTag
++                {
++                    Name = new FName("UnknownTrailingUInt32"),
++                    PropertyType = new FName("UInt32Property"),
++                    TagData = new FPropertyTagData(),
++                };
++                overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "UInt32Property", overlayTag.TagData, true);
++                overlayTag.Size = (int) (Ar.Position - overlayPos);
++                properties.Add(overlayTag);
++            }
++
++            if (structName is "NpcDataTableItem")
++            {
++                for (var trailingIndex = 0; trailingIndex < 10; trailingIndex++)
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName($"UnknownTrailingByte{trailingIndex + 1}"),
++                        PropertyType = new FName("ByteProperty"),
++                        TagData = new FPropertyTagData(),
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "ByteProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++            }
++
++            if (structName is "PcDataTableItem")
++            {
++                var overlayPos = Ar.Position;
++                var overlayTag = new FPropertyTag
++                {
++                    Name = new FName("HudSkillCostType"),
++                    PropertyType = new FName("EnumProperty"),
++                    TagData = new FPropertyTagData { EnumName = "EHudSkillCostType" },
++                };
++                overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "EnumProperty", overlayTag.TagData, true);
++                overlayTag.Size = (int) (Ar.Position - overlayPos);
++                properties.Add(overlayTag);
++            }
++
++            if (structName is "SkillEffectFilterTableItem")
++            {
++                foreach (var overlayName in new[] { "UnknownTrailingFlag1", "UnknownTrailingFlag2" })
++                {
++                    var overlayPos = Ar.Position;
++                    var overlayTag = new FPropertyTag
++                    {
++                        Name = new FName(overlayName),
++                        PropertyType = new FName("BoolProperty"),
++                        TagData = new FPropertyTagData(),
++                    };
++                    overlayTag.Tag = ReadPropertyTagType(Ar, mappings, "BoolProperty", overlayTag.TagData, true);
++                    overlayTag.Size = (int) (Ar.Position - overlayPos);
++                    properties.Add(overlayTag);
++                }
++            }
++
+             if (structName is "ItemTableItem" && properties.FirstOrDefault(x => x.Name.Text == "ItemType")?.Tag is { } itemType
+                 && itemType.GetValue(typeof(EItemType)) is EItemType val)
+             {
+

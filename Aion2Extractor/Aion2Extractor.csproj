@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <NoWarn>$(NoWarn);CA2022</NoWarn>
+    <!-- CUE4Parse with the AION2 readers and schema patches, cloned and patched by
+         Setup-Dependencies.ps1. -->
+    <CUE4ParseProject Condition="'$(CUE4ParseProject)' == ''">$(MSBuildThisFileDirectory)..\external\CUE4Parse\CUE4Parse\CUE4Parse.csproj</CUE4ParseProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(CUE4ParseProject)" />
+  </ItemGroup>
+</Project>
